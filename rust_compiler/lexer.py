@@ -1,5 +1,5 @@
 import re  # 导入正则表达式模块（虽然目前代码中未使用，但常用于更复杂的词法分析器中）
-from token import Token, TokenType  # 从自定义的 token.py 模块中导入 Token 类和 TokenType 枚举类型
+from compiler_token import Token, TokenType  # 从自定义的 compiler_token.py 模块中导入 Token 类和 TokenType 枚举类型
 
 class LexerError(Exception):
     # 定义词法分析器专属的异常类，继承自 Python 内置的 Exception 类
@@ -20,8 +20,8 @@ class Lexer:
         # 预先构建一个关键字字典，将形如 "if": TokenType.IF 的键值对存入字典
         # 这样在识别出标识符后，只需查表就能在 常数时间(O(1)) 内判断它是否是关键字
         self.keywords = {
-            # 遍历 TokenType 枚举，筛选出名字不是 ID、NUM 和 EOF，并且其值都是纯字母的枚举项（即关键字）
-            t.value: t for t in TokenType if t.name not in ["ID", "NUM", "EOF"] and t.value.isalpha()
+            # 遍历 TokenType 枚举，筛选出名字不是 ID、NUM 和 EOF，并且其值都是字母或数字（支持 i32）的枚举项
+            t.value: t for t in TokenType if t.name not in ["ID", "NUM", "EOF"] and t.value.isalnum()
         }
         
     def advance(self):

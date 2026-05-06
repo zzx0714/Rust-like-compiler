@@ -1,4 +1,4 @@
-from token import TokenType
+from compiler_token import TokenType
 import ast
 
 class ParserError(Exception):
