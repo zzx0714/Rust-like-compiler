@@ -1,0 +1,6 @@
+fn main() {
+    let a;
+    let mut b: i32;
+    let mut c: i32 = 10;
+    let d = 20;
+}

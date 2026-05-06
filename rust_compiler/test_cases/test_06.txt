@@ -1,0 +1,6 @@
+fn main() {
+    let a = (1 + 2) * 3 - 4 / 2;
+    let b = a > 5;
+    let c = a == 10;
+    let d = a != b;
+}
