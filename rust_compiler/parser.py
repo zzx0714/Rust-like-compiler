@@ -81,6 +81,14 @@ class Parser:
 
     def parse_type(self):
         # 检查是否是内置规定的已知类型标识符（当前项目只有i32）
+        if self.current_token.type == TokenType.AMP:
+            self.consume(TokenType.AMP)
+            is_mut = False
+            if self.current_token.type == TokenType.MUT:
+                is_mut = True
+                self.consume(TokenType.MUT)
+            inner = self.parse_type()
+            return ast.TypeRef(is_mut, inner)
         if self.current_token.type == TokenType.I32:
             self.consume(TokenType.I32)
             return ast.TypeI32()
@@ -268,6 +276,20 @@ class Parser:
     def parse_factor(self):
         # 最底层因子层：只可能是一个原子不可分割项（比如纯数字字面量NUM，纯单体变量标识符ID）或者是个硬制提升优先级的括号(...)
         token = self.current_token
+        # 借用表达式 & / &mut
+        if token.type == TokenType.AMP:
+            self.consume(TokenType.AMP)
+            is_mut = False
+            if self.current_token.type == TokenType.MUT:
+                is_mut = True
+                self.consume(TokenType.MUT)
+            target = self.parse_factor()
+            return ast.RefExpr(is_mut, target)
+        # 解引用表达式 *
+        if token.type == TokenType.MUL:
+            self.consume(TokenType.MUL)
+            target = self.parse_factor()
+            return ast.DerefExpr(target)
         # 1. 如果它是单纯的数字
         if token.type == TokenType.NUM:
             self.consume(TokenType.NUM)

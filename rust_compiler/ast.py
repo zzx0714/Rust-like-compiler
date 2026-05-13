@@ -177,6 +177,25 @@ class BinaryExpr(ASTNode):
         self.left.print_node(indent + 1)
         self.right.print_node(indent + 1)
 
+class RefExpr(ASTNode):
+    # 借用表达式节点 (&expr / &mut expr)
+    def __init__(self, is_mut, target):
+        self.is_mut = is_mut
+        self.target = target
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"RefExpr: mut={self.is_mut}")
+        self.target.print_node(indent + 1)
+
+class DerefExpr(ASTNode):
+    # 解引用表达式节点 (*expr)
+    def __init__(self, target):
+        self.target = target
+
+    def print_node(self, indent=0):
+        print("  " * indent + "DerefExpr")
+        self.target.print_node(indent + 1)
+
 class RangeExpr(ASTNode):
     # 范围表达式节点 (expr .. expr)
     def __init__(self, start, end):
@@ -203,6 +222,17 @@ class TypeI32(ASTNode):
     # 特定的数据类型节点对于i32，作为声明里的类型标识符存在
     def print_node(self, indent=0):
         print("  " * indent + "Type: i32")
+
+class TypeRef(ASTNode):
+    # 引用类型节点 (&T / &mut T)
+    def __init__(self, is_mut, inner_type):
+        self.is_mut = is_mut
+        self.inner_type = inner_type
+
+    def print_node(self, indent=0):
+        label = "Type: &mut" if self.is_mut else "Type: &"
+        print("  " * indent + label)
+        self.inner_type.print_node(indent + 1)
 
 class ParamNode(ASTNode):
     # 函数头部专用的形参节点（如 mut x: i32）
