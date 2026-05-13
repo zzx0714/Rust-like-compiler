@@ -109,6 +109,18 @@ class Parser:
             return self.parse_if_stmt()       # 遇到 if 控制流分支
         elif self.current_token.type == TokenType.WHILE:
             return self.parse_while_stmt()    # 遇到 while 循环流分支
+        elif self.current_token.type == TokenType.FOR:
+            return self.parse_for_stmt()      # 遇到 for 循环流分支
+        elif self.current_token.type == TokenType.LOOP:
+            return self.parse_loop_stmt()     # 遇到 loop 循环流分支
+        elif self.current_token.type == TokenType.BREAK:
+            self.consume(TokenType.BREAK)
+            self.consume(TokenType.SEMI)
+            return ast.BreakStmt()
+        elif self.current_token.type == TokenType.CONTINUE:
+            self.consume(TokenType.CONTINUE)
+            self.consume(TokenType.SEMI)
+            return ast.ContinueStmt()
         else:
             # 没有明显语句头的情况下，我们默认它是以某个"表达式"(包含标识符修改)开始的值赋值算式
             expr = self.parse_expression()
@@ -183,6 +195,33 @@ class Parser:
         condition = self.parse_expression()
         body = self.parse_block()
         return ast.WhileStmt(condition, body)
+
+    def parse_for_stmt(self):
+        # for [mut] ID in iterable block
+        self.consume(TokenType.FOR)
+        is_mut = False
+        if self.current_token.type == TokenType.MUT:
+            is_mut = True
+            self.consume(TokenType.MUT)
+        name = self.current_token.value
+        self.consume(TokenType.ID)
+        self.consume(TokenType.IN)
+        iterable = self.parse_iterable()
+        body = self.parse_block()
+        return ast.ForStmt(name, is_mut, iterable, body)
+
+    def parse_loop_stmt(self):
+        # loop block
+        self.consume(TokenType.LOOP)
+        body = self.parse_block()
+        return ast.LoopStmt(body)
+
+    def parse_iterable(self):
+        # iterable -> expr .. expr
+        start = self.parse_expression()
+        self.consume(TokenType.DOTDOT)
+        end = self.parse_expression()
+        return ast.RangeExpr(start, end)
 
     # =============== 核心：四级优先级表达式层序解析 =============== #
     # 该块函数从高到低排列，巧妙解决左递归导致进入死循环（死堆栈）的经典难题

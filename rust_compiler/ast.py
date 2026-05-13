@@ -111,6 +111,38 @@ class WhileStmt(ASTNode):
         self.condition.print_node(indent + 1)
         self.body.print_node(indent + 1)
 
+class ForStmt(ASTNode):
+    # For 循环语句节点 (for [mut] name in iterable { ... })
+    def __init__(self, name, is_mut, iterable, body):
+        self.name = name
+        self.is_mut = is_mut
+        self.iterable = iterable
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"ForStmt: mut={self.is_mut}, name={self.name}")
+        self.iterable.print_node(indent + 1)
+        self.body.print_node(indent + 1)
+
+class LoopStmt(ASTNode):
+    # loop 语句节点 (loop { ... })
+    def __init__(self, body):
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + "LoopStmt")
+        self.body.print_node(indent + 1)
+
+class BreakStmt(ASTNode):
+    # break 语句节点
+    def print_node(self, indent=0):
+        print("  " * indent + "BreakStmt")
+
+class ContinueStmt(ASTNode):
+    # continue 语句节点
+    def print_node(self, indent=0):
+        print("  " * indent + "ContinueStmt")
+
 class EmptyStmt(ASTNode):
     # 空的语句节点，例如单独的半角分号 `;`
     def print_node(self, indent=0):
@@ -144,6 +176,17 @@ class BinaryExpr(ASTNode):
         print("  " * indent + f"BinaryExpr: {self.op}")
         self.left.print_node(indent + 1)
         self.right.print_node(indent + 1)
+
+class RangeExpr(ASTNode):
+    # 范围表达式节点 (expr .. expr)
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def print_node(self, indent=0):
+        print("  " * indent + "RangeExpr")
+        self.start.print_node(indent + 1)
+        self.end.print_node(indent + 1)
 
 class CallExpr(ASTNode):
     # 函数调用表达式节点 (例如 func(arg1, arg2) )
