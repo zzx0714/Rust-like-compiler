@@ -64,6 +64,20 @@ class Block(ASTNode):
         for stmt in self.statements:
             stmt.print_node(indent + 1)  # 递归调用块中每一条语句自己的缩进打印函数
 
+class BlockExpr(ASTNode):
+    # 函数表达式语句块节点，允许尾表达式
+    def __init__(self, statements, tail_expr=None):
+        self.statements = statements
+        self.tail_expr = tail_expr
+
+    def print_node(self, indent=0):
+        print("  " * indent + "BlockExpr")
+        for stmt in self.statements:
+            stmt.print_node(indent + 1)
+        if self.tail_expr:
+            print("  " * (indent + 1) + "TailExpr")
+            self.tail_expr.print_node(indent + 2)
+
 class AssignStmt(ASTNode):
     # 基础的变量赋值语句节点（例如: a = 10;），不是第一次声明(Let)
     def __init__(self, lvalue, expr):
@@ -135,8 +149,13 @@ class LoopStmt(ASTNode):
 
 class BreakStmt(ASTNode):
     # break 语句节点
+    def __init__(self, expr=None):
+        self.expr = expr
+
     def print_node(self, indent=0):
         print("  " * indent + "BreakStmt")
+        if self.expr:
+            self.expr.print_node(indent + 1)
 
 class ContinueStmt(ASTNode):
     # continue 语句节点
@@ -206,6 +225,28 @@ class RangeExpr(ASTNode):
         print("  " * indent + "RangeExpr")
         self.start.print_node(indent + 1)
         self.end.print_node(indent + 1)
+
+class IfExpr(ASTNode):
+    # if 表达式节点 (if cond { ... } else { ... })
+    def __init__(self, condition, then_block, else_block):
+        self.condition = condition
+        self.then_block = then_block
+        self.else_block = else_block
+
+    def print_node(self, indent=0):
+        print("  " * indent + "IfExpr")
+        self.condition.print_node(indent + 1)
+        self.then_block.print_node(indent + 1)
+        self.else_block.print_node(indent + 1)
+
+class LoopExpr(ASTNode):
+    # loop 表达式节点 (loop { ... })
+    def __init__(self, body):
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + "LoopExpr")
+        self.body.print_node(indent + 1)
 
 class CallExpr(ASTNode):
     # 函数调用表达式节点 (例如 func(arg1, arg2) )

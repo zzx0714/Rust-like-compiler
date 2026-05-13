@@ -45,7 +45,7 @@ class Parser:
             self.consume(TokenType.ARROW)
             ret_type = self.parse_type()   # 获取紧随其后的返回类型
             
-        body = self.parse_block()          # 剩下的部分必定是函数体代码块
+        body = self.parse_block_expr()     # 剩下的部分必定是函数体代码块
         # 组装返回相应的 AST 节点
         return ast.FunctionDecl(name, params, ret_type, body)
 
@@ -104,6 +104,44 @@ class Parser:
         self.consume(TokenType.RBRACE)   # "}" 右花括号，代表结束收口
         return ast.Block(statements)
 
+    def is_statement_start(self, token_type):
+        return token_type in (
+            TokenType.SEMI,
+            TokenType.RETURN,
+            TokenType.LET,
+            TokenType.IF,
+            TokenType.WHILE,
+            TokenType.FOR,
+            TokenType.LOOP,
+            TokenType.BREAK,
+            TokenType.CONTINUE,
+        )
+
+    def parse_block_expr(self):
+        # `{ statement_list [tail_expr] }` 函数表达式语句块解析器
+        self.consume(TokenType.LBRACE)
+        statements = []
+        tail_expr = None
+        while self.current_token.type != TokenType.RBRACE and self.current_token.type != TokenType.EOF:
+            if self.is_statement_start(self.current_token.type):
+                statements.append(self.parse_statement())
+                continue
+            expr = self.parse_expression()
+            if self.current_token.type == TokenType.ASSIGN:
+                self.consume(TokenType.ASSIGN)
+                right = self.parse_expression()
+                self.consume(TokenType.SEMI)
+                statements.append(ast.AssignStmt(expr, right))
+                continue
+            if self.current_token.type == TokenType.SEMI:
+                self.consume(TokenType.SEMI)
+                statements.append(expr)
+                continue
+            tail_expr = expr
+            break
+        self.consume(TokenType.RBRACE)
+        return ast.BlockExpr(statements, tail_expr)
+
     def parse_statement(self):
         # 大分拣中心，通过判断各种分支的开头关键字来指派给负责具体的解析函数
         if self.current_token.type == TokenType.SEMI:
@@ -123,8 +161,11 @@ class Parser:
             return self.parse_loop_stmt()     # 遇到 loop 循环流分支
         elif self.current_token.type == TokenType.BREAK:
             self.consume(TokenType.BREAK)
+            expr = None
+            if self.current_token.type != TokenType.SEMI:
+                expr = self.parse_expression()
             self.consume(TokenType.SEMI)
-            return ast.BreakStmt()
+            return ast.BreakStmt(expr)
         elif self.current_token.type == TokenType.CONTINUE:
             self.consume(TokenType.CONTINUE)
             self.consume(TokenType.SEMI)
@@ -224,6 +265,23 @@ class Parser:
         body = self.parse_block()
         return ast.LoopStmt(body)
 
+    def parse_if_expr(self):
+        # if expr block_expr else block_expr
+        self.consume(TokenType.IF)
+        condition = self.parse_expression()
+        then_block = self.parse_block_expr()
+        if self.current_token.type != TokenType.ELSE:
+            raise ParserError(f"Expected ELSE at line {self.current_token.line}")
+        self.consume(TokenType.ELSE)
+        else_block = self.parse_block_expr()
+        return ast.IfExpr(condition, then_block, else_block)
+
+    def parse_loop_expr(self):
+        # loop block_expr
+        self.consume(TokenType.LOOP)
+        body = self.parse_block_expr()
+        return ast.LoopExpr(body)
+
     def parse_iterable(self):
         # iterable -> expr .. expr
         start = self.parse_expression()
@@ -315,6 +373,15 @@ class Parser:
             node = self.parse_expression()
             self.consume(TokenType.RPAREN)
             return node
+        # 4. 遇到一个表达式语句块
+        elif token.type == TokenType.LBRACE:
+            return self.parse_block_expr()
+        # 5. 遇到 if 表达式
+        elif token.type == TokenType.IF:
+            return self.parse_if_expr()
+        # 6. 遇到 loop 表达式
+        elif token.type == TokenType.LOOP:
+            return self.parse_loop_expr()
             
         # 若是以上三种类型之外的符号（比如突然蹦出一个不能计算的 '+'），肯定就是语法的彻底硬伤报错崩溃了
         raise ParserError(f"Unexpected factor token {token.type.name} at line {token.line}")
