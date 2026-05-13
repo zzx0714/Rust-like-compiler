@@ -226,6 +226,37 @@ class RangeExpr(ASTNode):
         self.start.print_node(indent + 1)
         self.end.print_node(indent + 1)
 
+class ArrayType(ASTNode):
+    # 数组类型节点 ([T; N])
+    def __init__(self, elem_type, size):
+        self.elem_type = elem_type
+        self.size = size
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"ArrayType: size={self.size}")
+        self.elem_type.print_node(indent + 1)
+
+class ArrayLit(ASTNode):
+    # 数组字面量节点 ([a, b, c])
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "ArrayLit")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class ArrayIndexExpr(ASTNode):
+    # 数组下标访问节点 (arr[idx])
+    def __init__(self, array, index):
+        self.array = array
+        self.index = index
+
+    def print_node(self, indent=0):
+        print("  " * indent + "ArrayIndexExpr")
+        self.array.print_node(indent + 1)
+        self.index.print_node(indent + 1)
+
 class IfExpr(ASTNode):
     # if 表达式节点 (if cond { ... } else { ... })
     def __init__(self, condition, then_block, else_block):

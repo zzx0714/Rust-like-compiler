@@ -1,0 +1,6 @@
+fn test_immutable_mod() {
+    let a:i32 = 1;
+    while a < 3 {
+        a = a + 1;
+    }
+}

@@ -81,6 +81,14 @@ class Parser:
 
     def parse_type(self):
         # 检查是否是内置规定的已知类型标识符（当前项目只有i32）
+        if self.current_token.type == TokenType.LBRACKET:
+            self.consume(TokenType.LBRACKET)
+            elem_type = self.parse_type()
+            self.consume(TokenType.SEMI)
+            size = self.current_token.value
+            self.consume(TokenType.NUM)
+            self.consume(TokenType.RBRACKET)
+            return ast.ArrayType(elem_type, size)
         if self.current_token.type == TokenType.AMP:
             self.consume(TokenType.AMP)
             is_mut = False
@@ -283,11 +291,13 @@ class Parser:
         return ast.LoopExpr(body)
 
     def parse_iterable(self):
-        # iterable -> expr .. expr
+        # iterable -> expr ['..' expr]
         start = self.parse_expression()
-        self.consume(TokenType.DOTDOT)
-        end = self.parse_expression()
-        return ast.RangeExpr(start, end)
+        if self.current_token.type == TokenType.DOTDOT:
+            self.consume(TokenType.DOTDOT)
+            end = self.parse_expression()
+            return ast.RangeExpr(start, end)
+        return start
 
     # =============== 核心：四级优先级表达式层序解析 =============== #
     # 该块函数从高到低排列，巧妙解决左递归导致进入死循环（死堆栈）的经典难题
@@ -303,7 +313,14 @@ class Parser:
         
         # 左结合性的体现运用到了一个平铺的 while 循环，而不是深层嵌套堆加（用来解决左递归）
         # 如果当前符号是比较符
-        while self.current_token.type in (TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE, TokenType.EQ, TokenType.NEQ):
+        while self.current_token.type in (
+            TokenType.LT,
+            TokenType.LE,
+            TokenType.GT,
+            TokenType.GE,
+            TokenType.EQ,
+            TokenType.NEQ,
+        ):
             op = self.current_token.value
             self.consume(self.current_token.type)
             # 通过获取到同级别的 `parse_addsub` 向右发展出 BinaryExpr 新根
@@ -331,8 +348,44 @@ class Parser:
             node = ast.BinaryExpr(op, node, self.parse_factor())
         return node
 
+    def parse_primary(self):
+        token = self.current_token
+        # 1. 如果它是单纯的数字
+        if token.type == TokenType.NUM:
+            self.consume(TokenType.NUM)
+            return ast.NumberLit(token.value)
+        # 2. 标识符
+        elif token.type == TokenType.ID:
+            name = token.value
+            self.consume(TokenType.ID)
+            if self.current_token.type == TokenType.LPAREN:
+                self.consume(TokenType.LPAREN)
+                args = self.parse_arg_list()
+                self.consume(TokenType.RPAREN)
+                return ast.CallExpr(name, args)
+            return ast.Identifier(name)
+        # 3. 遇到一个最高优先级的圆括号(...)
+        elif token.type == TokenType.LPAREN:
+            self.consume(TokenType.LPAREN)
+            node = self.parse_expression()
+            self.consume(TokenType.RPAREN)
+            return node
+        # 4. 遇到一个表达式语句块
+        elif token.type == TokenType.LBRACE:
+            return self.parse_block_expr()
+        # 5. 遇到 if 表达式
+        elif token.type == TokenType.IF:
+            return self.parse_if_expr()
+        # 6. 遇到 loop 表达式
+        elif token.type == TokenType.LOOP:
+            return self.parse_loop_expr()
+        # 7. 数组字面量
+        elif token.type == TokenType.LBRACKET:
+            return self.parse_array_lit()
+        raise ParserError(f"Unexpected factor token {token.type.name} at line {token.line}")
+
     def parse_factor(self):
-        # 最底层因子层：只可能是一个原子不可分割项（比如纯数字字面量NUM，纯单体变量标识符ID）或者是个硬制提升优先级的括号(...)
+        # 最底层因子层：只可能是一个原子不可分割项或前缀表达式
         token = self.current_token
         # 借用表达式 & / &mut
         if token.type == TokenType.AMP:
@@ -348,43 +401,24 @@ class Parser:
             self.consume(TokenType.MUL)
             target = self.parse_factor()
             return ast.DerefExpr(target)
-        # 1. 如果它是单纯的数字
-        if token.type == TokenType.NUM:
-            self.consume(TokenType.NUM)
-            return ast.NumberLit(token.value)
-        # 2. 标识符
-        elif token.type == TokenType.ID:
-            name = token.value
-            self.consume(TokenType.ID)
-            
-            # 若这个 ID 后恰巧连着一个左括号 '('，则这就不仅是一个单独拿出来当作值的简单变量，而是一个调用函数的算子 (类似 foo(...) 表达式)
-            if self.current_token.type == TokenType.LPAREN:
-                self.consume(TokenType.LPAREN)
-                args = self.parse_arg_list()  # 读取所有实参
-                self.consume(TokenType.RPAREN)
-                return ast.CallExpr(name, args)  # 还原成调用型节点并返回
-                
-            return ast.Identifier(name)  # 若不带括号只是简单变量
-            
-        # 3. 遇到一个最高优先级的圆括号(...)
-        elif token.type == TokenType.LPAREN:
-            self.consume(TokenType.LPAREN)
-            # 让在最开始的源头表达式引擎替我们来对包裹在被括号圈禁里的东西开辟一种新生且完全独立的解析周期
-            node = self.parse_expression()
-            self.consume(TokenType.RPAREN)
-            return node
-        # 4. 遇到一个表达式语句块
-        elif token.type == TokenType.LBRACE:
-            return self.parse_block_expr()
-        # 5. 遇到 if 表达式
-        elif token.type == TokenType.IF:
-            return self.parse_if_expr()
-        # 6. 遇到 loop 表达式
-        elif token.type == TokenType.LOOP:
-            return self.parse_loop_expr()
-            
-        # 若是以上三种类型之外的符号（比如突然蹦出一个不能计算的 '+'），肯定就是语法的彻底硬伤报错崩溃了
-        raise ParserError(f"Unexpected factor token {token.type.name} at line {token.line}")
+        node = self.parse_primary()
+        while self.current_token.type == TokenType.LBRACKET:
+            self.consume(TokenType.LBRACKET)
+            index = self.parse_expression()
+            self.consume(TokenType.RBRACKET)
+            node = ast.ArrayIndexExpr(node, index)
+        return node
+
+    def parse_array_lit(self):
+        self.consume(TokenType.LBRACKET)
+        elements = []
+        if self.current_token.type != TokenType.RBRACKET:
+            elements.append(self.parse_expression())
+            while self.current_token.type == TokenType.COMMA:
+                self.consume(TokenType.COMMA)
+                elements.append(self.parse_expression())
+        self.consume(TokenType.RBRACKET)
+        return ast.ArrayLit(elements)
 
     def parse_arg_list(self):
         # 处理函数调用时传输的实质性的表达式参数组

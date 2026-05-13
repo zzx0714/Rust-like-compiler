@@ -1,6 +1,7 @@
 import sys
 from lexer import Lexer
 from parser import Parser, ParserError
+from semantic import SemanticChecker, SemanticError
 import traceback
 
 def main():
@@ -43,10 +44,16 @@ def main():
         ast_root = parser.parse_program()
         # 成功拿到并输出整棵缩进风格的树结构
         ast_root.print_node()
-        print("\n分析成功")
+        print("\n语法分析成功")
+
+        checker = SemanticChecker()
+        checker.check(ast_root)
+        print("语义分析成功")
     except ParserError as e:
         # 捕捉在语法分析匹配中出现的各种不符合语法规则的错误抛出
         print(f"语法分析失败: {e}")
+    except SemanticError as e:
+        print(f"语义分析失败: {e}")
     except Exception as e:
         # 意料之外的系统型错误
         print(f"未知错误: {e}")
