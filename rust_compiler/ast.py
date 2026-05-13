@@ -257,6 +257,36 @@ class ArrayIndexExpr(ASTNode):
         self.array.print_node(indent + 1)
         self.index.print_node(indent + 1)
 
+class TupleType(ASTNode):
+    # 元组类型节点 ((T1, T2, ...))
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "TupleType")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class TupleLit(ASTNode):
+    # 元组字面量节点 ((a, b, c))
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "TupleLit")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class TupleIndexExpr(ASTNode):
+    # 元组下标访问节点 (tuple.0)
+    def __init__(self, target, index):
+        self.target = target
+        self.index = index
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"TupleIndexExpr: {self.index}")
+        self.target.print_node(indent + 1)
+
 class IfExpr(ASTNode):
     # if 表达式节点 (if cond { ... } else { ... })
     def __init__(self, condition, then_block, else_block):

@@ -81,6 +81,18 @@ class Parser:
 
     def parse_type(self):
         # 检查是否是内置规定的已知类型标识符（当前项目只有i32）
+        if self.current_token.type == TokenType.LPAREN:
+            self.consume(TokenType.LPAREN)
+            elements = []
+            if self.current_token.type != TokenType.RPAREN:
+                elements.append(self.parse_type())
+                while self.current_token.type == TokenType.COMMA:
+                    self.consume(TokenType.COMMA)
+                    if self.current_token.type == TokenType.RPAREN:
+                        break
+                    elements.append(self.parse_type())
+            self.consume(TokenType.RPAREN)
+            return ast.TupleType(elements)
         if self.current_token.type == TokenType.LBRACKET:
             self.consume(TokenType.LBRACKET)
             elem_type = self.parse_type()
@@ -367,9 +379,21 @@ class Parser:
         # 3. 遇到一个最高优先级的圆括号(...)
         elif token.type == TokenType.LPAREN:
             self.consume(TokenType.LPAREN)
-            node = self.parse_expression()
+            if self.current_token.type == TokenType.RPAREN:
+                self.consume(TokenType.RPAREN)
+                return ast.TupleLit([])
+            first = self.parse_expression()
+            if self.current_token.type == TokenType.COMMA:
+                elements = [first]
+                while self.current_token.type == TokenType.COMMA:
+                    self.consume(TokenType.COMMA)
+                    if self.current_token.type == TokenType.RPAREN:
+                        break
+                    elements.append(self.parse_expression())
+                self.consume(TokenType.RPAREN)
+                return ast.TupleLit(elements)
             self.consume(TokenType.RPAREN)
-            return node
+            return first
         # 4. 遇到一个表达式语句块
         elif token.type == TokenType.LBRACE:
             return self.parse_block_expr()
@@ -402,11 +426,17 @@ class Parser:
             target = self.parse_factor()
             return ast.DerefExpr(target)
         node = self.parse_primary()
-        while self.current_token.type == TokenType.LBRACKET:
-            self.consume(TokenType.LBRACKET)
-            index = self.parse_expression()
-            self.consume(TokenType.RBRACKET)
-            node = ast.ArrayIndexExpr(node, index)
+        while self.current_token.type in (TokenType.LBRACKET, TokenType.DOT):
+            if self.current_token.type == TokenType.LBRACKET:
+                self.consume(TokenType.LBRACKET)
+                index = self.parse_expression()
+                self.consume(TokenType.RBRACKET)
+                node = ast.ArrayIndexExpr(node, index)
+                continue
+            self.consume(TokenType.DOT)
+            index = self.current_token.value
+            self.consume(TokenType.NUM)
+            node = ast.TupleIndexExpr(node, index)
         return node
 
     def parse_array_lit(self):

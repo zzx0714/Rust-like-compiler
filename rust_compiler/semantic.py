@@ -184,6 +184,21 @@ class SemanticChecker:
             if arr_type and arr_type[0] == "array":
                 return arr_type[1]
             return None
+        if isinstance(expr, ast.TupleLit):
+            elements = []
+            for elem in expr.elements:
+                elements.append(self._infer_expr_type(elem))
+            return self._type_tuple(elements)
+        if isinstance(expr, ast.TupleIndexExpr):
+            tup_type = self._infer_expr_type(expr.target)
+            if tup_type and tup_type[0] == "tuple":
+                try:
+                    idx = int(expr.index)
+                except (TypeError, ValueError):
+                    return None
+                if 0 <= idx < len(tup_type[1]):
+                    return tup_type[1][idx]
+            return None
         if isinstance(expr, ast.IfExpr):
             self._infer_expr_type(expr.condition)
             then_type = self._infer_block_expr_type(expr.then_block)
@@ -220,6 +235,15 @@ class SemanticChecker:
             inner = self._infer_expr_type(lvalue.target)
             if inner and inner[0] == "ref":
                 return inner[2]
+        if isinstance(lvalue, ast.TupleIndexExpr):
+            tup_type = self._infer_expr_type(lvalue.target)
+            if tup_type and tup_type[0] == "tuple":
+                try:
+                    idx = int(lvalue.index)
+                except (TypeError, ValueError):
+                    return None
+                if 0 <= idx < len(tup_type[1]):
+                    return tup_type[1][idx]
         return None
 
     def _check_assignment(self, lvalue):
@@ -237,6 +261,8 @@ class SemanticChecker:
             return node.name
         if isinstance(node, ast.ArrayIndexExpr):
             return self._base_identifier_name(node.array)
+        if isinstance(node, ast.TupleIndexExpr):
+            return self._base_identifier_name(node.target)
         return None
 
     def _type_i32(self):
@@ -244,6 +270,9 @@ class SemanticChecker:
 
     def _type_array(self, elem_type, size):
         return ("array", elem_type, size)
+
+    def _type_tuple(self, elements):
+        return ("tuple", elements)
 
     def _type_ref(self, is_mut, inner):
         return ("ref", is_mut, inner)
@@ -262,6 +291,9 @@ class SemanticChecker:
             except (TypeError, ValueError):
                 size = type_node.size
             return self._type_array(self._type_from_ast(type_node.elem_type), size)
+        if isinstance(type_node, ast.TupleType):
+            elements = [self._type_from_ast(elem) for elem in type_node.elements]
+            return self._type_tuple(elements)
         return None
 
     def _type_equal(self, left, right):
@@ -277,6 +309,9 @@ class SemanticChecker:
             return prefix + self._type_str(type_info[2])
         if type_info[0] == "array":
             return f"[{self._type_str(type_info[1])};{type_info[2]}]"
+        if type_info[0] == "tuple":
+            inner = ",".join(self._type_str(t) for t in type_info[1])
+            return f"({inner})"
         if type_info[0] == "range":
             return "range"
         return "<unknown>"
