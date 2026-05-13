@@ -87,14 +87,18 @@ class ReturnStmt(ASTNode):
 
 class IfStmt(ASTNode):
     # If 条件分支语句节点
-    def __init__(self, condition, body):
+    def __init__(self, condition, body, else_body=None):
         self.condition = condition # 条件表达式节点（一般运算后是个布尔结果）
         self.body = body           # 条件为真时执行的分支代码块 (Block)
+        self.else_body = else_body # 可选的 else 分支 (Block 或 IfStmt)
 
     def print_node(self, indent=0):
         print("  " * indent + "IfStmt")
         self.condition.print_node(indent + 1)  # 打印条件分支表达式
         self.body.print_node(indent + 1)       # 打印执行内容块
+        if self.else_body:
+            print("  " * (indent + 1) + "Else")
+            self.else_body.print_node(indent + 2)
 
 class WhileStmt(ASTNode):
     # While 循环语句节点

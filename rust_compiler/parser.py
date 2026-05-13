@@ -168,7 +168,14 @@ class Parser:
         self.consume(TokenType.IF)
         condition = self.parse_expression()  # 紧跟着的是真假判断条件表达式
         body = self.parse_block()            # 以及一个运行该逻辑的代码块
-        return ast.IfStmt(condition, body)
+        else_body = None
+        if self.current_token.type == TokenType.ELSE:
+            self.consume(TokenType.ELSE)
+            if self.current_token.type == TokenType.IF:
+                else_body = self.parse_if_stmt()
+            else:
+                else_body = self.parse_block()
+        return ast.IfStmt(condition, body, else_body)
 
     def parse_while_stmt(self):
         # while cond block
