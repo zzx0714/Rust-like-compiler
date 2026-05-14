@@ -45,7 +45,7 @@ class Parser:
             self.consume(TokenType.ARROW)
             ret_type = self.parse_type()   # 获取紧随其后的返回类型
             
-        body = self.parse_block()          # 剩下的部分必定是函数体代码块
+        body = self.parse_block_expr()     # 剩下的部分必定是函数体代码块
         # 组装返回相应的 AST 节点
         return ast.FunctionDecl(name, params, ret_type, body)
 
@@ -81,6 +81,34 @@ class Parser:
 
     def parse_type(self):
         # 检查是否是内置规定的已知类型标识符（当前项目只有i32）
+        if self.current_token.type == TokenType.LPAREN:
+            self.consume(TokenType.LPAREN)
+            elements = []
+            if self.current_token.type != TokenType.RPAREN:
+                elements.append(self.parse_type())
+                while self.current_token.type == TokenType.COMMA:
+                    self.consume(TokenType.COMMA)
+                    if self.current_token.type == TokenType.RPAREN:
+                        break
+                    elements.append(self.parse_type())
+            self.consume(TokenType.RPAREN)
+            return ast.TupleType(elements)
+        if self.current_token.type == TokenType.LBRACKET:
+            self.consume(TokenType.LBRACKET)
+            elem_type = self.parse_type()
+            self.consume(TokenType.SEMI)
+            size = self.current_token.value
+            self.consume(TokenType.NUM)
+            self.consume(TokenType.RBRACKET)
+            return ast.ArrayType(elem_type, size)
+        if self.current_token.type == TokenType.AMP:
+            self.consume(TokenType.AMP)
+            is_mut = False
+            if self.current_token.type == TokenType.MUT:
+                is_mut = True
+                self.consume(TokenType.MUT)
+            inner = self.parse_type()
+            return ast.TypeRef(is_mut, inner)
         if self.current_token.type == TokenType.I32:
             self.consume(TokenType.I32)
             return ast.TypeI32()
@@ -96,6 +124,44 @@ class Parser:
         self.consume(TokenType.RBRACE)   # "}" 右花括号，代表结束收口
         return ast.Block(statements)
 
+    def is_statement_start(self, token_type):
+        return token_type in (
+            TokenType.SEMI,
+            TokenType.RETURN,
+            TokenType.LET,
+            TokenType.IF,
+            TokenType.WHILE,
+            TokenType.FOR,
+            TokenType.LOOP,
+            TokenType.BREAK,
+            TokenType.CONTINUE,
+        )
+
+    def parse_block_expr(self):
+        # `{ statement_list [tail_expr] }` 函数表达式语句块解析器
+        self.consume(TokenType.LBRACE)
+        statements = []
+        tail_expr = None
+        while self.current_token.type != TokenType.RBRACE and self.current_token.type != TokenType.EOF:
+            if self.is_statement_start(self.current_token.type):
+                statements.append(self.parse_statement())
+                continue
+            expr = self.parse_expression()
+            if self.current_token.type == TokenType.ASSIGN:
+                self.consume(TokenType.ASSIGN)
+                right = self.parse_expression()
+                self.consume(TokenType.SEMI)
+                statements.append(ast.AssignStmt(expr, right))
+                continue
+            if self.current_token.type == TokenType.SEMI:
+                self.consume(TokenType.SEMI)
+                statements.append(expr)
+                continue
+            tail_expr = expr
+            break
+        self.consume(TokenType.RBRACE)
+        return ast.BlockExpr(statements, tail_expr)
+
     def parse_statement(self):
         # 大分拣中心，通过判断各种分支的开头关键字来指派给负责具体的解析函数
         if self.current_token.type == TokenType.SEMI:
@@ -109,6 +175,21 @@ class Parser:
             return self.parse_if_stmt()       # 遇到 if 控制流分支
         elif self.current_token.type == TokenType.WHILE:
             return self.parse_while_stmt()    # 遇到 while 循环流分支
+        elif self.current_token.type == TokenType.FOR:
+            return self.parse_for_stmt()      # 遇到 for 循环流分支
+        elif self.current_token.type == TokenType.LOOP:
+            return self.parse_loop_stmt()     # 遇到 loop 循环流分支
+        elif self.current_token.type == TokenType.BREAK:
+            self.consume(TokenType.BREAK)
+            expr = None
+            if self.current_token.type != TokenType.SEMI:
+                expr = self.parse_expression()
+            self.consume(TokenType.SEMI)
+            return ast.BreakStmt(expr)
+        elif self.current_token.type == TokenType.CONTINUE:
+            self.consume(TokenType.CONTINUE)
+            self.consume(TokenType.SEMI)
+            return ast.ContinueStmt()
         else:
             # 没有明显语句头的情况下，我们默认它是以某个"表达式"(包含标识符修改)开始的值赋值算式
             expr = self.parse_expression()
@@ -168,7 +249,14 @@ class Parser:
         self.consume(TokenType.IF)
         condition = self.parse_expression()  # 紧跟着的是真假判断条件表达式
         body = self.parse_block()            # 以及一个运行该逻辑的代码块
-        return ast.IfStmt(condition, body)
+        else_body = None
+        if self.current_token.type == TokenType.ELSE:
+            self.consume(TokenType.ELSE)
+            if self.current_token.type == TokenType.IF:
+                else_body = self.parse_if_stmt()
+            else:
+                else_body = self.parse_block()
+        return ast.IfStmt(condition, body, else_body)
 
     def parse_while_stmt(self):
         # while cond block
@@ -176,6 +264,52 @@ class Parser:
         condition = self.parse_expression()
         body = self.parse_block()
         return ast.WhileStmt(condition, body)
+
+    def parse_for_stmt(self):
+        # for [mut] ID in iterable block
+        self.consume(TokenType.FOR)
+        is_mut = False
+        if self.current_token.type == TokenType.MUT:
+            is_mut = True
+            self.consume(TokenType.MUT)
+        name = self.current_token.value
+        self.consume(TokenType.ID)
+        self.consume(TokenType.IN)
+        iterable = self.parse_iterable()
+        body = self.parse_block()
+        return ast.ForStmt(name, is_mut, iterable, body)
+
+    def parse_loop_stmt(self):
+        # loop block
+        self.consume(TokenType.LOOP)
+        body = self.parse_block()
+        return ast.LoopStmt(body)
+
+    def parse_if_expr(self):
+        # if expr block_expr else block_expr
+        self.consume(TokenType.IF)
+        condition = self.parse_expression()
+        then_block = self.parse_block_expr()
+        if self.current_token.type != TokenType.ELSE:
+            raise ParserError(f"Expected ELSE at line {self.current_token.line}")
+        self.consume(TokenType.ELSE)
+        else_block = self.parse_block_expr()
+        return ast.IfExpr(condition, then_block, else_block)
+
+    def parse_loop_expr(self):
+        # loop block_expr
+        self.consume(TokenType.LOOP)
+        body = self.parse_block_expr()
+        return ast.LoopExpr(body)
+
+    def parse_iterable(self):
+        # iterable -> expr ['..' expr]
+        start = self.parse_expression()
+        if self.current_token.type == TokenType.DOTDOT:
+            self.consume(TokenType.DOTDOT)
+            end = self.parse_expression()
+            return ast.RangeExpr(start, end)
+        return start
 
     # =============== 核心：四级优先级表达式层序解析 =============== #
     # 该块函数从高到低排列，巧妙解决左递归导致进入死循环（死堆栈）的经典难题
@@ -191,7 +325,14 @@ class Parser:
         
         # 左结合性的体现运用到了一个平铺的 while 循环，而不是深层嵌套堆加（用来解决左递归）
         # 如果当前符号是比较符
-        while self.current_token.type in (TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE, TokenType.EQ, TokenType.NEQ):
+        while self.current_token.type in (
+            TokenType.LT,
+            TokenType.LE,
+            TokenType.GT,
+            TokenType.GE,
+            TokenType.EQ,
+            TokenType.NEQ,
+        ):
             op = self.current_token.value
             self.consume(self.current_token.type)
             # 通过获取到同级别的 `parse_addsub` 向右发展出 BinaryExpr 新根
@@ -219,8 +360,7 @@ class Parser:
             node = ast.BinaryExpr(op, node, self.parse_factor())
         return node
 
-    def parse_factor(self):
-        # 最底层因子层：只可能是一个原子不可分割项（比如纯数字字面量NUM，纯单体变量标识符ID）或者是个硬制提升优先级的括号(...)
+    def parse_primary(self):
         token = self.current_token
         # 1. 如果它是单纯的数字
         if token.type == TokenType.NUM:
@@ -230,26 +370,85 @@ class Parser:
         elif token.type == TokenType.ID:
             name = token.value
             self.consume(TokenType.ID)
-            
-            # 若这个 ID 后恰巧连着一个左括号 '('，则这就不仅是一个单独拿出来当作值的简单变量，而是一个调用函数的算子 (类似 foo(...) 表达式)
             if self.current_token.type == TokenType.LPAREN:
                 self.consume(TokenType.LPAREN)
-                args = self.parse_arg_list()  # 读取所有实参
+                args = self.parse_arg_list()
                 self.consume(TokenType.RPAREN)
-                return ast.CallExpr(name, args)  # 还原成调用型节点并返回
-                
-            return ast.Identifier(name)  # 若不带括号只是简单变量
-            
+                return ast.CallExpr(name, args)
+            return ast.Identifier(name)
         # 3. 遇到一个最高优先级的圆括号(...)
         elif token.type == TokenType.LPAREN:
             self.consume(TokenType.LPAREN)
-            # 让在最开始的源头表达式引擎替我们来对包裹在被括号圈禁里的东西开辟一种新生且完全独立的解析周期
-            node = self.parse_expression()
+            if self.current_token.type == TokenType.RPAREN:
+                self.consume(TokenType.RPAREN)
+                return ast.TupleLit([])
+            first = self.parse_expression()
+            if self.current_token.type == TokenType.COMMA:
+                elements = [first]
+                while self.current_token.type == TokenType.COMMA:
+                    self.consume(TokenType.COMMA)
+                    if self.current_token.type == TokenType.RPAREN:
+                        break
+                    elements.append(self.parse_expression())
+                self.consume(TokenType.RPAREN)
+                return ast.TupleLit(elements)
             self.consume(TokenType.RPAREN)
-            return node
-            
-        # 若是以上三种类型之外的符号（比如突然蹦出一个不能计算的 '+'），肯定就是语法的彻底硬伤报错崩溃了
+            return first
+        # 4. 遇到一个表达式语句块
+        elif token.type == TokenType.LBRACE:
+            return self.parse_block_expr()
+        # 5. 遇到 if 表达式
+        elif token.type == TokenType.IF:
+            return self.parse_if_expr()
+        # 6. 遇到 loop 表达式
+        elif token.type == TokenType.LOOP:
+            return self.parse_loop_expr()
+        # 7. 数组字面量
+        elif token.type == TokenType.LBRACKET:
+            return self.parse_array_lit()
         raise ParserError(f"Unexpected factor token {token.type.name} at line {token.line}")
+
+    def parse_factor(self):
+        # 最底层因子层：只可能是一个原子不可分割项或前缀表达式
+        token = self.current_token
+        # 借用表达式 & / &mut
+        if token.type == TokenType.AMP:
+            self.consume(TokenType.AMP)
+            is_mut = False
+            if self.current_token.type == TokenType.MUT:
+                is_mut = True
+                self.consume(TokenType.MUT)
+            target = self.parse_factor()
+            return ast.RefExpr(is_mut, target)
+        # 解引用表达式 *
+        if token.type == TokenType.MUL:
+            self.consume(TokenType.MUL)
+            target = self.parse_factor()
+            return ast.DerefExpr(target)
+        node = self.parse_primary()
+        while self.current_token.type in (TokenType.LBRACKET, TokenType.DOT):
+            if self.current_token.type == TokenType.LBRACKET:
+                self.consume(TokenType.LBRACKET)
+                index = self.parse_expression()
+                self.consume(TokenType.RBRACKET)
+                node = ast.ArrayIndexExpr(node, index)
+                continue
+            self.consume(TokenType.DOT)
+            index = self.current_token.value
+            self.consume(TokenType.NUM)
+            node = ast.TupleIndexExpr(node, index)
+        return node
+
+    def parse_array_lit(self):
+        self.consume(TokenType.LBRACKET)
+        elements = []
+        if self.current_token.type != TokenType.RBRACKET:
+            elements.append(self.parse_expression())
+            while self.current_token.type == TokenType.COMMA:
+                self.consume(TokenType.COMMA)
+                elements.append(self.parse_expression())
+        self.consume(TokenType.RBRACKET)
+        return ast.ArrayLit(elements)
 
     def parse_arg_list(self):
         # 处理函数调用时传输的实质性的表达式参数组

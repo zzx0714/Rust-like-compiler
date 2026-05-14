@@ -64,6 +64,20 @@ class Block(ASTNode):
         for stmt in self.statements:
             stmt.print_node(indent + 1)  # 递归调用块中每一条语句自己的缩进打印函数
 
+class BlockExpr(ASTNode):
+    # 函数表达式语句块节点，允许尾表达式
+    def __init__(self, statements, tail_expr=None):
+        self.statements = statements
+        self.tail_expr = tail_expr
+
+    def print_node(self, indent=0):
+        print("  " * indent + "BlockExpr")
+        for stmt in self.statements:
+            stmt.print_node(indent + 1)
+        if self.tail_expr:
+            print("  " * (indent + 1) + "TailExpr")
+            self.tail_expr.print_node(indent + 2)
+
 class AssignStmt(ASTNode):
     # 基础的变量赋值语句节点（例如: a = 10;），不是第一次声明(Let)
     def __init__(self, lvalue, expr):
@@ -87,14 +101,18 @@ class ReturnStmt(ASTNode):
 
 class IfStmt(ASTNode):
     # If 条件分支语句节点
-    def __init__(self, condition, body):
+    def __init__(self, condition, body, else_body=None):
         self.condition = condition # 条件表达式节点（一般运算后是个布尔结果）
         self.body = body           # 条件为真时执行的分支代码块 (Block)
+        self.else_body = else_body # 可选的 else 分支 (Block 或 IfStmt)
 
     def print_node(self, indent=0):
         print("  " * indent + "IfStmt")
         self.condition.print_node(indent + 1)  # 打印条件分支表达式
         self.body.print_node(indent + 1)       # 打印执行内容块
+        if self.else_body:
+            print("  " * (indent + 1) + "Else")
+            self.else_body.print_node(indent + 2)
 
 class WhileStmt(ASTNode):
     # While 循环语句节点
@@ -106,6 +124,43 @@ class WhileStmt(ASTNode):
         print("  " * indent + "WhileStmt")
         self.condition.print_node(indent + 1)
         self.body.print_node(indent + 1)
+
+class ForStmt(ASTNode):
+    # For 循环语句节点 (for [mut] name in iterable { ... })
+    def __init__(self, name, is_mut, iterable, body):
+        self.name = name
+        self.is_mut = is_mut
+        self.iterable = iterable
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"ForStmt: mut={self.is_mut}, name={self.name}")
+        self.iterable.print_node(indent + 1)
+        self.body.print_node(indent + 1)
+
+class LoopStmt(ASTNode):
+    # loop 语句节点 (loop { ... })
+    def __init__(self, body):
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + "LoopStmt")
+        self.body.print_node(indent + 1)
+
+class BreakStmt(ASTNode):
+    # break 语句节点
+    def __init__(self, expr=None):
+        self.expr = expr
+
+    def print_node(self, indent=0):
+        print("  " * indent + "BreakStmt")
+        if self.expr:
+            self.expr.print_node(indent + 1)
+
+class ContinueStmt(ASTNode):
+    # continue 语句节点
+    def print_node(self, indent=0):
+        print("  " * indent + "ContinueStmt")
 
 class EmptyStmt(ASTNode):
     # 空的语句节点，例如单独的半角分号 `;`
@@ -141,6 +196,119 @@ class BinaryExpr(ASTNode):
         self.left.print_node(indent + 1)
         self.right.print_node(indent + 1)
 
+class RefExpr(ASTNode):
+    # 借用表达式节点 (&expr / &mut expr)
+    def __init__(self, is_mut, target):
+        self.is_mut = is_mut
+        self.target = target
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"RefExpr: mut={self.is_mut}")
+        self.target.print_node(indent + 1)
+
+class DerefExpr(ASTNode):
+    # 解引用表达式节点 (*expr)
+    def __init__(self, target):
+        self.target = target
+
+    def print_node(self, indent=0):
+        print("  " * indent + "DerefExpr")
+        self.target.print_node(indent + 1)
+
+class RangeExpr(ASTNode):
+    # 范围表达式节点 (expr .. expr)
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+    def print_node(self, indent=0):
+        print("  " * indent + "RangeExpr")
+        self.start.print_node(indent + 1)
+        self.end.print_node(indent + 1)
+
+class ArrayType(ASTNode):
+    # 数组类型节点 ([T; N])
+    def __init__(self, elem_type, size):
+        self.elem_type = elem_type
+        self.size = size
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"ArrayType: size={self.size}")
+        self.elem_type.print_node(indent + 1)
+
+class ArrayLit(ASTNode):
+    # 数组字面量节点 ([a, b, c])
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "ArrayLit")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class ArrayIndexExpr(ASTNode):
+    # 数组下标访问节点 (arr[idx])
+    def __init__(self, array, index):
+        self.array = array
+        self.index = index
+
+    def print_node(self, indent=0):
+        print("  " * indent + "ArrayIndexExpr")
+        self.array.print_node(indent + 1)
+        self.index.print_node(indent + 1)
+
+class TupleType(ASTNode):
+    # 元组类型节点 ((T1, T2, ...))
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "TupleType")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class TupleLit(ASTNode):
+    # 元组字面量节点 ((a, b, c))
+    def __init__(self, elements):
+        self.elements = elements
+
+    def print_node(self, indent=0):
+        print("  " * indent + "TupleLit")
+        for elem in self.elements:
+            elem.print_node(indent + 1)
+
+class TupleIndexExpr(ASTNode):
+    # 元组下标访问节点 (tuple.0)
+    def __init__(self, target, index):
+        self.target = target
+        self.index = index
+
+    def print_node(self, indent=0):
+        print("  " * indent + f"TupleIndexExpr: {self.index}")
+        self.target.print_node(indent + 1)
+
+class IfExpr(ASTNode):
+    # if 表达式节点 (if cond { ... } else { ... })
+    def __init__(self, condition, then_block, else_block):
+        self.condition = condition
+        self.then_block = then_block
+        self.else_block = else_block
+
+    def print_node(self, indent=0):
+        print("  " * indent + "IfExpr")
+        self.condition.print_node(indent + 1)
+        self.then_block.print_node(indent + 1)
+        self.else_block.print_node(indent + 1)
+
+class LoopExpr(ASTNode):
+    # loop 表达式节点 (loop { ... })
+    def __init__(self, body):
+        self.body = body
+
+    def print_node(self, indent=0):
+        print("  " * indent + "LoopExpr")
+        self.body.print_node(indent + 1)
+
 class CallExpr(ASTNode):
     # 函数调用表达式节点 (例如 func(arg1, arg2) )
     def __init__(self, name, args):
@@ -156,6 +324,17 @@ class TypeI32(ASTNode):
     # 特定的数据类型节点对于i32，作为声明里的类型标识符存在
     def print_node(self, indent=0):
         print("  " * indent + "Type: i32")
+
+class TypeRef(ASTNode):
+    # 引用类型节点 (&T / &mut T)
+    def __init__(self, is_mut, inner_type):
+        self.is_mut = is_mut
+        self.inner_type = inner_type
+
+    def print_node(self, indent=0):
+        label = "Type: &mut" if self.is_mut else "Type: &"
+        print("  " * indent + label)
+        self.inner_type.print_node(indent + 1)
 
 class ParamNode(ASTNode):
     # 函数头部专用的形参节点（如 mut x: i32）

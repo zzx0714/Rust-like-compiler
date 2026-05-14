@@ -148,6 +148,10 @@ class Lexer:
             if char == '-' and self.peek() == '>':
                 self.advance(); self.advance()  # 消耗字符
                 return Token(TokenType.ARROW, "->", start_line)  # 打包出 '->' (通常用于指定返回类型)
+            # 如果当前是 '.' 且紧跟 '.'
+            if char == '.' and self.peek() == '.':
+                self.advance(); self.advance()
+                return Token(TokenType.DOTDOT, "..", start_line)
 
             # --- 6. 如果不是长复合符，查阅是否是常用的单字符运算符 ---
             # 定义一个查表字典，用来把单字符映射为枚举 TokenType

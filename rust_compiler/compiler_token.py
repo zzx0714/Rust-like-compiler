@@ -44,6 +44,7 @@ class TokenType(Enum):
     COLON = ":"        # 冒号，通常用于类型声明
     COMMA = ","        # 逗号，分隔参数
     ARROW = "->"       # 箭头符号，通常用于表示函数返回类型
+    DOTDOT = ".."      # 范围运算符 (for range)
     DOT = "."          # 点操作符，用于访问成员等 (拓展备用)
 
     EOF = "#"          # End Of File，指示源代码解析完毕的标识位
